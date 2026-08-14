@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+    <title>Demonic Cursed Floor</title>
+    <!-- 👹 PWAアプリ用マニフェスト設定（黒背景に赤く四角い目を持つトゲ岩モンスターロゴを完全データ化） -->
+    <link rel="manifest" href="data:application/json,{%22name%22:%22Demonic%20Cursed%20Floor%22,%22short_name%22:%22Demonic%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22%23050000%22,%22theme_color%22:%22%23050000%22,%22icons%22:[{%22src%22:%22data:image/svg+xml;utf8,%3Csvg%20xmlns=%27http://w3.org}]}">
+    <style>
+        body { margin:0; background:#050000; height:100vh; display:flex; justify-content:center; align-items:center; overflow:hidden; touch-action:none; font-family:serif; }
+        #game-box { position:relative; width:576px; height:320px; }
+        #c { background:#100005; display:block; box-shadow:0 0 45px #ff0000; border:2px solid #300; }
+        .b { position:absolute; bottom:-75px; width:70px; height:70px; background:rgba(180,0,0,0.6); border:2px solid #ff3333; border-radius:50%; color:#fff; font-size:24px; text-align:center; line-height:70px; z-index:10; font-weight:bold; text-shadow:1px 1px 3px #000; }
+        #bl { left:10px; } #br { left:95px; } #bj { right:10px; width:80px; height:80px; line-height:80px; bottom:-80px; font-size:30px; }
+        #menu { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; z-index:20; background:rgba(20,0,0,0.95); padding:20px; border:2px solid #ff3333; box-shadow:0 0 20px #f00; width:220px; }
+        h2 { color:#ff3333; margin:0 0 15px 0; font-size:18px; text-shadow:0 0 5px #000; }
+        .m-btn { display:block; width:200px; margin:10px auto; padding:10px; background:#400505; border:1px solid #ff3333; color:#fff; font-weight:bold; font-size:15px; cursor:pointer; }
+    </style>
+</head>
+<body>
+    <div id="game-box">
+        <div id="menu">
+            <h2>† 氷結と逆流：呪われた大宮 †</h2>
+            <div class="m-btn" onclick="startLevel(1)">🔥 220マス呪詛ロング魔界</div>
+            <div class="m-btn" onclick="startLevel(2)">💀 220マス怨念魔界 (地下迷宮付)</div>
+        </div>
+        <canvas id="c" width="576" height="320"></canvas>
+        <div id="bl" class="b">◀</div><div id="br" class="b">▶</div><div id="bj" class="b">†</div>
+    </div>
+    <script>
+        const cvs = document.getElementById("c"), ctx = cvs.getContext("2d");
+        const p = { x:40, y:200, w:20, h:32, vx:0, vy:0, g:false, frame:0, jStage:0 };
+        const keys = { l:false, r:false, j:false, d:false }, blocks = [], enemies = [], blood = [], traps = [];
+        let camX = 0, score = 0, pts = 0, currentLevel = 1, isPlaying = false, isUnderground = false;
+        let pipeTimer = 0, jPressed = false;
+
+        function startLevel(lv) {
+            currentLevel = lv; blocks.length = 0; enemies.length = 0; blood.length = 0; traps.length = 0;
+            p.x = 40; p.y = 200; p.vx = 0; p.vy = 0; camX = 0; score = 0; isUnderground = false; pipeTimer = 0; p.jStage = 0;
+            document.getElementById("menu").style.display = "none"; isPlaying = true;
+
+            let length = 220;
+
+            for(let i=0; i<length; i++) {
+                let makeHole = false;
+                if(lv === 1) {
+                    if(i===15 || i===16 || i===45 || i===46 || i===80 || i===81 || i===110 || i===111 || i===140 || i===141 || i===170 || i===171 || i===195) makeHole = true;
+                } else {
+                    if(i===18 || i===19 || (i>=35 && i<=40) || i===65 || i===66 || i===90 || i===91 || i===120 || i===121 || i===150 || i===151 || i===180 || i===181 || i===200) makeHole = true;
+                }
+                
+                if(!makeHole) {
+                    let floorType = 'g';
+                    if(i >= 25 && i <= 32) floorType = 'ice';
+                    if(i >= 60 && i <= 68) floorType = 'rev';
+                    if(i >= 120 && i <= 128) floorType = 'ice';
+                    if(i >= 155 && i <= 165) floorType = 'rev';
+                    blocks.push({ x:i*24, y:270, w:24, h:50, t: floorType });
+                }
+            }
+
+            traps.push(
+                { x: 400, startY: -50, y: -50, w: 36, h: 40, state: 0, timer: 0 },
+                { x: 900, startY: -50, y: -50, w: 36, h: 40, state: 0, timer: 0 },
+                { x: 1500, startY: -50, y: -50, w: 36, h: 40, state: 0, timer: 0 },
+                { x: 2200, startY: -50, y: -50, w: 36, h: 40, state: 0, timer: 0 },
+                { x: 3000, startY: -50, y: -50, w: 36, h: 40, state: 0, timer: 0 },
+                { x: 3800, startY: -50, y: -50, w: 36, h: 40, state: 0, timer: 0 },
+                { x: 4500, startY: -50, y: -50, w: 36, h: 40, state: 0, timer: 0 }
+            );
+
+            if(lv === 1) {
+                blocks.push({ x:200, y:180, w:24, h:24, t:'?' }, { x:280, y:190, w:30, h:80, t:'p' }, { x:700, y:160, w:72, h:24, t:'b' });
+                enemies.push({ x: 320, y: 246, w: 20, h: 24, vx: -1.8, a: true, t: 'e1', hp: 1 });
+                enemies.push({ x: 550, y: 246, w: 22, h: 24, vx: -1.2, a: true, t: 'e4', hp: 2 });
+                enemies.push({ x: 850, y: 150, w: 22, h: 22, vx: -2.2, a: true, t: 'e3', hp: 1 });
+                enemies.push({ x: 1200, y: 222, w: 36, h: 48, vx: -1.0, a: true, t: 'e2', hp: 1 });
+                enemies.push({ x: 1600, y: 246, w: 22, h: 24, vx: -1.3, a: true, t: 'e4', hp: 2 });
+                enemies.push({ x: 2000, y: 130, w: 22, h: 22, vx: -2.5, a: true, t: 'e3', hp: 1 });
+                enemies.push({ x: 2500, y: 222, w: 36, h: 48, vx: -1.2, a: true, t: 'e2', hp: 1 });
+                enemies.push({ x: 3100, y: 246, w: 22, h: 24, vx: -1.1, a: true, t: 'e4', hp: 2 });
+                enemies.push({ x: 3700, y: 246, w: 20, h: 24, vx: -2.5, a: true, t: 'e1', hp: 1 });
+                enemies.push({ x: 4300, y: 150, w: 22, h: 22, vx: -2.6, a: true, t: 'e3', hp: 1 });
+                enemies.push({ x: 4700, y: 246, w: 22, h: 24, vx: -1.4, a: true, t: 'e4', hp: 2 });
+            } else {
+                blocks.push({ x:600, y:190, w:36, h:80, t:'pipe_in' }, { x:1050, y:190, w:36, h:80, t:'pipe_out' }, { x:240, y:180, w:24, h:24, t:'?' });
+                enemies.push({ x: 260, y: 246, w: 20, h: 24, vx: -1.5, a: true, t: 'e1', hp: 1 });
+                enemies.push({ x: 420, y: 246, w: 22, h: 24, vx: -1.2, a: true, t: 'e4', hp: 2 });
+                enemies.push({ x: 1300, y: 222, w: 36, h: 48, vx: -1.0, a: true, t: 'e2', hp: 1 });
+                enemies.push({ x: 1700, y: 150, w: 22, h: 22, vx: -2.8, a: true, t: 'e3', hp: 1 });
+                enemies.push({ x: 2200, y: 246, w: 22, h: 24, vx: -1.4, a: true, t: 'e4', hp: 2 });
+                enemies.push({ x: 2800, y: 222, w: 36, h: 48, vx: -1.3, a: true, t: 'e2', hp: 1 });
+                enemies.push({ x: 3400, y: 140, w: 22, h: 22, vx: -2.2, a: true, t: 'e3', hp: 1 });
+                enemies.push({ x: 4000, y: 246, w: 22, h: 24, vx: -1.5, a: true, t: 'e4', hp: 2 });
+                enemies.push({ x: 4600, y: 246, w: 20, h: 24, vx: -2.6, a: true, t: 'e1', hp: 1 });
+            }
+            blocks.push({ x:(length - 2)*24, y:60, w:12, h:210, t:'e' });
+        }
+ const ugBlocks = [], ugEnemies = [];
+        for(let i=0; i<80; i++) {
+            if(i!==35 && i!==36) {
+                let uType = 'b';
+                if(i >= 15 && i <= 22) uType = 'ice';
+                ugBlocks.push({ x:i*24, y:270, w:24, h:50, t: uType });
+            }
+            ugBlocks.push({ x:i*24, y:0, w:24, h:50, t:'b' });
+        }
+        ugBlocks.push({ x:0, y:50, w:24, h:220, t:'b' }, { x:1860, y:170, w:48, h:100, t:'pipe_exit' });
+        ugEnemies.push({ x: 300, y: 246, w: 20, h: 24, vx: -2.0, a: true, t: 'e1', hp: 1 });
+        ugEnemies.push({ x: 600, y: 160, w: 22, h: 22, vx: -2.5, a: true, t: 'e3', hp: 1 });
+        ugEnemies.push({ x: 800, y: 246, w: 22, h: 24, vx: -1.3, a: true, t: 'e4', hp: 2 });
+        ugEnemies.push({ x: 1200, y: 246, w: 20, h: 24, vx: -2.2, a: true, t: 'e1', hp: 1 });
+
+        window.addEventListener("keydown", e => { 
+            if(e.code==="ArrowLeft") keys.l=true; if(e.code==="ArrowRight") { keys.r=true; keys.l=false; } 
+            if(e.code==="Space"||e.code==="ArrowUp") keys.j=true; if(e.code==="ArrowDown") keys.d=true;
+        });
+        window.addEventListener("keyup", e => { 
+            if(e.code==="ArrowLeft") keys.l=false; if(e.code==="ArrowRight") keys.r=false; 
+            if(e.code==="Space"||e.code==="ArrowUp") keys.j=false; if(e.code==="ArrowDown") keys.d=false;
+        });
+
+        const setupTouch = (id, key) => {
+            const el = document.getElementById(id);
+            el.addEventListener("touchstart", e => { e.preventDefault(); keys[key] = true; if(key==='l') { pipeTimer = Date.now(); keys.r = false; } if(key==='r') keys.l = false; });
+            el.addEventListener("touchend", e => { e.preventDefault(); keys[key] = false; if(key==='l') { if(Date.now() - pipeTimer > 800) keys.d = true; else keys.d = false; } });
+        };
+        setupTouch("bl", "l"); setupTouch("br", "r"); setupTouch("bj", "j");
+
+        function hit(r1, r2) { return r1.x < r2.x + r2.w && r1.x + r1.w > r2.x && r1.y < r2.y + r2.h && r1.y + r1.h > r2.y; }
+        function gameOver(msg) { alert(msg); isPlaying = false; keys.l = keys.r = keys.j = keys.d = false; document.getElementById("menu").style.display = "block"; }
+
+        let currentFloorType = 'g';
+
+        function loop() {
+            if (isPlaying) {
+                pts++;
+                let targetVx = keys.l ? -2.8 : (keys.r ? 2.8 : 0);
+                
+                if(p.g && currentFloorType === 'ice') {
+                    p.vx += (targetVx - p.vx) * 0.08;
+                } else if(p.g && currentFloorType === 'rev') {
+                    p.vx = targetVx - 1.4;
+                } else {
+                    p.vx = targetVx;
+                }
+                
+                if (keys.j) {
+                    if (!jPressed) {
+                        if (p.g) { p.vy = -9.2; p.g = false; p.jStage = 1; } 
+                        else if (p.jStage === 1) { p.jStage = 2; for(let i=0; i<8; i++) blood.push({x:p.x+p.w/2, y:p.y+p.h/2, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4, r:3, a:1}); } 
+                        else if (p.jStage === 2) { p.jStage = 3; }
+                        jPressed = true;
+                    }
+                } else { jPressed = false; }
+
+                if (p.jStage === 2) { p.vy = 0.5; if(pts % 4 === 0) { blood.push({x:p.x+p.w/2, y:p.y+p.h/2, vx:(Math.random()-0.5)*2, vy:Math.random()*1, r:2.5, a:0.8}); } } 
+                else { p.vy += 0.42; }
+                
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < camX) p.x = camX;
+
+                let activeBlocks = isUnderground ? ugBlocks : blocks;
+                let activeEnemies = isUnderground ? ugEnemies : enemies;
+
+                if(!isUnderground && currentLevel === 2 && keys.d) {
+                    activeBlocks.forEach(b => {
+                        if(b.t === 'pipe_in' && Math.abs((p.x + p.w/2) - (b.x + b.w/2)) < 20 && p.y + p.h <= b.y + 10) {
+                            isUnderground = true; p.x = 40; p.y = 100; camX = 0; keys.d = false;
+                        }
+                    });
+                }
+if(Math.abs(p.vx) > 0 && pts % 4 === 0) { blood.push({ x: p.x + p.w/2, y: p.y + p.h, vx: (Math.random()-0.5)*2, vy: -Math.random()*1, r:2.5, a: 0.8 }); }
+
+                p.g = false;
+                let onFloorThisFrame = 'g';
+
+                activeBlocks.forEach(b => {
+                    if(hit(p, b)) {
+                        if(b.t==='e') { gameOver("† 煉獄完全踏破 †\nSCORE: "+score); }
+                        if(b.t==='pipe_exit') { isUnderground = false; p.x = 1060; p.y = 100; camX = 900; return; }
+
+                        if(p.vy > 0 && p.y + p.h - p.vy <= b.y) { p.y = b.y - p.h; p.vy = 0; p.g = true; p.jStage = 0; onFloorThisFrame = b.t; }
+                        else if(p.vy < 0 && p.y - p.vy >= b.y + b.h) { 
+                            p.y = b.y + b.h; p.vy = 0; 
+                            if(b.t==='?') { b.t='d'; score+=666; for(let i=0;i<8;i++) blood.push({x:b.x+12,y:b.y,vx:(Math.random()-0.5)*3,vy:-Math.random()*3,r:3,a:1}); } 
+                        }
+                        else if(p.vx > 0 && p.x + p.w - p.vx <= b.x) p.x = b.x - p.w; 
+                        else if(p.vx < 0 && p.x - p.vx >= b.x + b.w) p.x = b.x + b.w;
+                    }
+                });
+                currentFloorType = onFloorThisFrame;
+
+                if (!isUnderground) {
+                    traps.forEach(t => {
+                        if(t.state === 0 && Math.abs(p.x - t.x) < 180 && p.x < t.x + 30) { t.state = 1; t.timer = 20; }
+                        if(t.state === 1) { t.timer--; if(t.timer <= 0) t.state = 2; }
+                        if(t.state === 2) { t.y += 8.0; if(t.y >= 230) { t.y = 230; t.state = 3; t.timer = 40; for(let i=0; i<12; i++) blood.push({x:t.x+t.w/2, y:268, vx:(Math.random()-0.5)*7, vy:-Math.random()*4, r:4, a:1}); } }
+                        if(t.state === 3) { t.timer--; if(t.timer <= 0) { t.y -= 1.5; if(t.y <= t.startY) { t.y = t.startY; t.state = 0; } } }
+                        if(hit(p, {x: t.x + (t.state===1? (pts%2===0?3:-3) : 0), y: t.y, w: t.w, h: t.h})) { gameOver("💀 巨大トゲ岩に圧殺された..."); }
+                    });
+                }
+
+                activeEnemies.forEach(e => {
+                    if(!e.a) return; e.x += e.vx; if(e.x < camX - 60 || e.x > camX + 630) e.vx *= -1;
+                    if(hit(p, e)) {
+                        let stepHeight = e.t === 'e2' ? 12 : 8;
+                        if(p.vy > 0 && p.y + p.h - p.vy <= e.y + stepHeight) { 
+                            e.hp--; p.vy = -6.5; p.jStage = 0; 
+                            for(let i=0; i<15; i++) blood.push({x:e.x+e.w/2, y:e.y+e.h/2, vx:(Math.random()-0.5)*6, vy:(Math.random()-0.5)*6, r:4, a:1});
+                            if(e.hp <= 0) { e.a = false; score+=1000; } else { e.vx *= 2.0; score+=300; }
+                        }
+                        else { gameOver("💀 魂を喰われた..."); }
+                    }
+                });
+
+                if(p.y > cvs.height) { gameOver("🔥 奈落の闇に消えた..."); }
+                if(p.y < 0) p.y = 0;
+                if(p.x > camX + cvs.width / 2) camX = p.x - cvs.width / 2;
+
+                ctx.fillStyle = isUnderground ? 'rgba(5, 0, 10, 0.5)' : 'rgba(15, 2, 5, 0.4)'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+                ctx.save(); ctx.translate(-camX, 0);
+                
+                activeBlocks.forEach(b => { 
+                    ctx.fillStyle = b.t==='g'?'#3a0505':(b.t==='ice'?'#002244':(b.t==='rev'?'#220033':(b.t==='?'?'#800000':(b.t==='b'?'#1a0202':(b.t.includes('pipe')?'#004411':'#fff'))))); 
+                    ctx.fillRect(b.x, b.y, b.w, b.h); ctx.strokeStyle = '#000'; ctx.strokeRect(b.x, b.y, b.w, b.h);
+                    if(b.t==='ice') { ctx.fillStyle='rgba(0,200,255,0.3)'; ctx.fillRect(b.x, b.y, b.w, 4); }
+                    if(b.t==='rev') { ctx.fillStyle='rgba(150,0,255,0.3)'; ctx.fillRect(b.x + (pts%24), b.y+4, 4, 12); }
+                });
+
+                for(let i=blood.length-1; i>=0; i--) {
+                    let bl = blood[i]; bl.x += bl.vx; bl.y += bl.vy; bl.a -= 0.02; if(bl.a <= 0) { blood.splice(i,1); continue; }
+                    ctx.fillStyle = `rgba(180, 0, 10, ${bl.a})`; ctx.beginPath(); ctx.arc(bl.x, bl.y, bl.r, 0, Math.PI*2); ctx.fill();
+                }
+
+                if (!isUnderground) {
+                    traps.forEach(t => {
+                        let shakeX = (t.state === 1) ? (pts % 2 === 0 ? 3 : -3) : 0;
+                        ctx.fillStyle = '#220005'; ctx.fillRect(t.x + shakeX, t.y, t.w, t.h);
+                        ctx.strokeStyle = '#ff3333'; ctx.lineWidth = 2; ctx.strokeRect(t.x + shakeX, t.y, t.w, t.h);
+                        ctx.fillStyle = '#ff0000'; ctx.fillRect(t.x + shakeX + 13, t.y + 12, 10, 10); ctx.fillStyle = '#fff'; ctx.fillRect(t.x + shakeX + 17, t.y + 16, 3, 3);
+                        ctx.fillStyle = '#7a0010'; for(let i=0; i<4; i++) { ctx.beginPath(); ctx.moveTo(t.x + shakeX + i*9, t.y + t.h); ctx.lineTo(t.x + shakeX + i*9 + 4.5, t.y + t.h + 8); ctx.lineTo(t.x + shakeX + (i+1)*9, t.y + t.h); ctx.fill(); }
+                    });
+                }
+
+                activeEnemies.forEach(e => { 
+                    if (e.a) { 
+                        if(e.t === 'e4') {
+                            ctx.fillStyle = e.hp === 2 ? '#660000' : '#b30000'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.strokeStyle = '#fff'; ctx.strokeRect(e.x, e.y, e.w, e.h);
+                            if(e.hp === 2) { ctx.fillRect(e.x+2, e.y-5, 4, 5); ctx.fillRect(e.x+14, e.y-5, 4, 5); }
+                            ctx.fillStyle = '#ffea00'; ctx.fillRect(e.x+4, e.y+4, 4, 4); ctx.fillRect(e.x+12, e.y+4, 4, 4);
+                        } else if(e.t === 'e2') {
+                            ctx.fillStyle = '#220011'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.fillStyle = '#ff0055'; ctx.fillRect(e.x+6, e.y+6, 6, 6); ctx.fillRect(e.x+24, e.y+6, 6, 6);
+                            ctx.fillStyle = '#fff'; for(let l=0; l<5; l++) ctx.fillRect(e.x + l*7, e.y + e.h - 6, 3, 6);
+                        } else if(e.t === 'e3') {
+                            ctx.fillStyle = '#4a0d0d'; ctx.beginPath(); ctx.arc(e.x+e.w/2, e.y+e.h/2, e.w/2, 0, Math.PI*2); ctx.fill();
+                            ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.arc(e.x+e.w/2, e.y+e.h/2, 4, 0, Math.PI*2); ctx.fill();
+                        } else {
+                            ctx.fillStyle = '#40001a'; ctx.fillRect(e.x, e.y, e.w, e.h); ctx.fillStyle = '#ff0000'; ctx.fillRect(e.x+3, e.y+3, 5, 5); ctx.fillRect(e.x+12, e.y+3, 5, 5);
+                            ctx.fillStyle = '#fff'; ctx.fillRect(e.x+1, e.y+15, 3, 5); ctx.fillRect(e.x+16, e.y+15, 3, 5);
+                        }
+                    } 
+                });
+
+                if(Math.abs(p.vx) > 0 && p.g) p.frame = Math.floor(pts / 8) % 4; else if(!p.g) p.frame = 4; else p.frame = 0;
+                ctx.fillStyle = '#ffcca4'; ctx.fillRect(p.x+5, p.y, 10, 10); ctx.fillStyle = '#fff'; ctx.fillRect(p.x+6, p.y+3, 3, 3); ctx.fillStyle = '#402000'; ctx.fillRect(p.x+4, p.y-2, 12, 4); ctx.fillStyle = '#220000'; ctx.fillRect(p.x+2, p.y+10, 16, 12);
+                
+                if(p.jStage === 2) {
+                    ctx.fillStyle = '#111'; let wingY = (pts % 10 < 5) ? -8 : 3;
+                    ctx.fillRect(p.x - 8, p.y + 12 + wingY, 10, 5); ctx.fillRect(p.x + p.w - 2, p.y + 12 + wingY, 10, 5);
+                }
+
+                ctx.fillStyle = '#000'; if(p.frame === 1 || p.frame === 3) ctx.fillRect(p.x+2, p.y+22, 5, 10); else if(p.frame === 2) ctx.fillRect(p.x+13, p.y+22, 5, 10); else { ctx.fillRect(p.x+2, p.y+22, 5, 10); ctx.fillRect(p.x+13, p.y+22, 5, 10); }
+
+                ctx.restore();
+                ctx.fillStyle = '#ff3333'; ctx.font = 'bold 12px sans-serif'; 
+                ctx.fillText((isUnderground?"【地下深淵】":"【地上煉獄】") + " SCORE: "+score, 15, 25);
+            }
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>
